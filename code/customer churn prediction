@@ -1,0 +1,154 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, classification_report
+from xgboost import XGBClassifier
+
+df = pd.read_csv("/content/Telco-Customer-Churn.csv")
+df.head()
+
+df.drop('customerID', axis=1, inplace=True)
+
+
+
+df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+df.fillna(df.mean(numeric_only=True), inplace=True)
+
+print("Churn Distribution (Percentage):")
+print(df['Churn'].value_counts(normalize=True))
+
+sns.countplot(x='Churn', data=df)
+plt.title("Churn Distribution")
+plt.show()
+
+sns.boxplot(x='Churn', y='MonthlyCharges', data=df)
+plt.title("Monthly Charges vs Churn")
+plt.show()
+
+le = LabelEncoder()
+
+for column in df.columns:
+    if df[column].dtype == 'object':
+        df[column] = le.fit_transform(df[column])
+
+X = df.drop('Churn', axis=1)
+y = df['Churn']
+
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+lr = LogisticRegression(max_iter=1000)
+lr.fit(X_train, y_train)
+
+y_pred_lr = lr.predict(X_test)
+y_prob_lr = lr.predict_proba(X_test)[:,1]
+
+print("Logistic Regression Accuracy:", accuracy_score(y_test, y_pred_lr))
+print("Logistic Regression Recall:", recall_score(y_test, y_pred_lr))
+print("Logistic Regression ROC-AUC:", roc_auc_score(y_test, y_prob_lr))
+
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+
+y_pred_rf = rf.predict(X_test)
+y_prob_rf = rf.predict_proba(X_test)[:,1]
+
+print("Random Forest Accuracy:", accuracy_score(y_test, y_pred_rf))
+print("Random Forest Recall:", recall_score(y_test, y_pred_rf))
+print("Random Forest ROC-AUC:", roc_auc_score(y_test, y_prob_rf))
+
+# ------------------------------
+# XGBoost Model
+# ------------------------------
+xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+
+xgb.fit(X_train, y_train)
+
+y_pred_xgb = xgb.predict(X_test)
+y_prob_xgb = xgb.predict_proba(X_test)[:,1]
+
+print("XGBoost Accuracy:", accuracy_score(y_test, y_pred_xgb))
+print("XGBoost Recall:", recall_score(y_test, y_pred_xgb))
+print("XGBoost ROC-AUC:", roc_auc_score(y_test, y_prob_xgb))
+
+importances = rf.feature_importances_
+
+feature_importance_df = pd.DataFrame({
+    'Feature': X.columns,
+    'Importance': importances
+}).sort_values(by='Importance', ascending=False)
+
+print("Top 10 Important Features:")
+print(feature_importance_df.head(10))
+
+
+results = pd.DataFrame({
+    "Model": ["Logistic Regression", "Random Forest","XGBoost"],
+    "Accuracy": [
+        accuracy_score(y_test, y_pred_lr),
+        accuracy_score(y_test, y_pred_rf),
+        accuracy_score(y_test, y_pred_xgb)
+    ],
+    "Recall": [
+        recall_score(y_test, y_pred_lr),
+        recall_score(y_test, y_pred_rf),
+        recall_score(y_test, y_pred_xgb)
+    ],
+    "ROC-AUC": [
+        roc_auc_score(y_test, y_prob_lr),
+        roc_auc_score(y_test, y_prob_rf),
+        roc_auc_score(y_test, y_prob_xgb)
+
+    ]
+})
+
+results
+print("Random Forest performs better in capturing churn customers based on Recall and ROC-AUC.")
+from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay
+
+# ------------------------------
+# Confusion Matrix - Logistic Regression
+# ------------------------------
+ConfusionMatrixDisplay.from_estimator(lr, X_test, y_test)
+plt.title("Confusion Matrix - Logistic Regression")
+plt.show()
+
+# ------------------------------
+# Confusion Matrix - Random Forest
+# ------------------------------
+ConfusionMatrixDisplay.from_estimator(rf, X_test, y_test)
+plt.title("Confusion Matrix - Random Forest")
+plt.show()
+
+# ------------------------------
+# ROC Curve - Logistic Regression
+# ------------------------------
+RocCurveDisplay.from_estimator(lr, X_test, y_test)
+plt.title("ROC Curve - Logistic Regression")
+plt.show()
+
+# ------------------------------
+# ROC Curve - Random Forest
+# ------------------------------
+RocCurveDisplay.from_estimator(rf, X_test, y_test)
+plt.title("ROC Curve - Random Forest")
+plt.show()
+
+# ------------------------------
+# Confusion Matrix - XGBoost
+# ------------------------------
+ConfusionMatrixDisplay.from_estimator(xgb, X_test, y_test)
+plt.title("Confusion Matrix - XGBoost")
+plt.show()
